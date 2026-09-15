@@ -1,0 +1,18 @@
+[project]
+name = "llm-inference-lab"
+version = "0.1.0"
+description = "Reproducible single-GPU LLM inference benchmarking and evaluation lab."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "torch",
+    "transformers",
+    "accelerate",
+    "huggingface-hub",
+    "matplotlib>=3.11.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
