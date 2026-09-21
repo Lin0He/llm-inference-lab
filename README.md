@@ -211,8 +211,29 @@ E2E TPS → Decode TPS
 because the fixed TTFT overhead is amortized over more generated tokens.
 
 ---
+## Backend Benchmarking
 
-## V0.2 Conclusion
+### HF vs vLLM
+
+Test configuration:
+
+- Model: Qwen/Qwen3.5-4B
+- GPU: RTX 4090
+- Precision: BF16
+- Batch size: 1
+- Input tokens: 512
+- Output tokens: 128
+
+| Backend | Mean E2E Latency | Mean E2E Throughput |
+|---|---:|---:|
+| Hugging Face | 1988.0 ms | 64.38 tok/s |
+| vLLM | 1293.9 ms | 98.93 tok/s |
+
+Under this specific workload, vLLM reduced E2E latency by ~34.9% and increased E2E throughput by ~53.7% compared with the Hugging Face baseline.
+
+---
+
+## V0.2 Test Summary
 
 The benchmark separates LLM inference latency into two dominant components:
 
@@ -231,3 +252,27 @@ T_request ≈ TTFT(L_input) + (N_output - 1) × TPOT
 ```
 
 with TPOT remaining relatively stable across both experiments.
+
+## v0.4 — Multi-Backend Benchmarking
+
+The benchmark framework now supports backend-specific execution behind a shared experiment interface.
+
+Currently supported:
+
+- Hugging Face Transformers
+- vLLM
+- SGLang — planned
+
+The runner reuses long-lived backend resources within an experiment group and explicitly releases them when switching backends.
+
+Backend comparison experiments keep the following inputs fixed:
+
+- Model
+- Precision
+- Tokenized input workload
+- Batch size
+- Input sequence length
+- Output sequence length
+- Decoding constraints
+
+Prefix caching is disabled for controlled backend comparisons to avoid reusing computation across repeated requests.
