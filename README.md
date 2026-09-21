@@ -56,6 +56,69 @@ uv run python analysis/plot_output_length_scaling.py \
 ```
 
 ---
+## RoadMaps
+```text
+V0.x → V1.0  Benchmarking / Architecting
+│
+├── V0.1  HF baseline ✅
+│         E2E / throughput / VRAM
+│         context scaling
+│
+├── V0.2  Fine-grained latency ✅
+│         TTFT / TPOT
+│         prefill vs decode
+│         output-length scaling
+│
+├── V0.3  Batch scaling ✅
+│         batch size vs latency / throughput / VRAM
+│
+├── V0.4  Backend comparison  ✅
+│         HF vs vLLM vs (Todo: SGLang🚧)
+│         offline + serving workload
+│
+├── V0.5  Precision / quantization 🚧
+│         FP16 / BF16 / INT8 / 4-bit
+│         memory / latency / throughput
+│         + quality drift
+│
+├── V0.6  Model scaling
+│         model size
+│         Qwen vs Mistral
+│
+├── V0.7  VLM / multimodal inference
+│         image tokens
+│         multimodal TTFT / memory / throughput
+│
+├── V0.8  Serving workload
+│         concurrency
+│         ISL / OSL distributions
+│         queueing / request scheduling
+│
+├── V0.9  Capacity / reporting
+│         benchmark reports
+│         capacity estimation
+│         Docker / reproducibility
+│
+└── V1.0  Reproducible inference benchmark suite  
+          multiple backends
+          multiple workloads
+          reproducible reports
+
+
+V1.x  Profiling & Optimization 📖📝🤔💭
+│
+├── PyTorch Profiler / Nsight
+├── prefill / decode kernel attribution
+├── attention / KV-cache analysis
+├── torch.compile
+├── memory bandwidth / compute bottlenecks
+├── MoE routing / expert utilization
+├── Triton operators
+├── CUDA operators
+├── kernel fusion
+└── quantized kernels
+```
+---
 
 ## Metrics
 
