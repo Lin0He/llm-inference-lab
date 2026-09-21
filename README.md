@@ -42,7 +42,7 @@ Run benchmark:
 
 ```bash
 cd src
-uv run python -m core.benchmark
+uv run python -m benchmark
 ```
 
 Generate analysis figures:

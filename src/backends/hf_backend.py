@@ -36,6 +36,12 @@ class HFBackend:
 
         self.model.eval()
 
+    def close(self) -> None:
+        if self.model is not None:
+            self.model = None
+
+        torch.cuda.empty_cache()
+
     def run(
         self,
         workload: TokenWorkload,
@@ -47,11 +53,11 @@ class HFBackend:
                 "Model must be loaded before running inference."
             )
 
-        if workload.batch_size != 1:
-            raise ValueError(
-                "V0.2 TTFT/TPOT measurement currently supports "
-                "batch_size=1 only."
-            )
+        # if workload.batch_size != 1:
+        #     raise ValueError(
+        #         "V0.2 TTFT/TPOT measurement currently supports "
+        #         "batch_size=1 only."
+        #     )
 
         if config.model_id != self.model_id:
             raise ValueError(
@@ -75,58 +81,107 @@ class HFBackend:
             device="cuda",
         )
 
-        timer = FirstTokenTimer()
+        measure_fine_grained_latency = (
+            workload.batch_size == 1
+        )
+
+        timer = (
+            FirstTokenTimer()
+            if measure_fine_grained_latency
+            else None
+        )
 
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.synchronize()
 
         t0 = time.perf_counter()
 
+        generation_kwargs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "max_new_tokens": config.max_new_tokens,
+            "do_sample": False,
+        }
+
+        if timer is not None:
+            generation_kwargs["streamer"] = timer
+
         with torch.inference_mode():
             outputs = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=config.max_new_tokens,
-                do_sample=False,
-                streamer=timer,
+                **generation_kwargs
             )
 
         torch.cuda.synchronize()
         t2 = time.perf_counter()
 
-        if timer.first_token_time is None:
-            raise RuntimeError(
-                "First generated token was not observed."
-            )
+        # if timer.first_token_time is None:
+        #     raise RuntimeError(
+        #         "First generated token was not observed."
+        #     )
 
-        t1 = timer.first_token_time
+        # t1 = timer.first_token_time
+
+        # e2e_latency_ms = (t2 - t0) * 1000
+        # ttft_ms = (t1 - t0) * 1000
 
         e2e_latency_ms = (t2 - t0) * 1000
-        ttft_ms = (t1 - t0) * 1000
+
+        if timer is not None:
+            if timer.first_token_time is None:
+                raise RuntimeError(
+                    "First generated token was not observed."
+                )
+
+            ttft_ms = (timer.first_token_time - t0) * 1000
+
+        else:
+            ttft_ms = None
 
         input_length = input_ids.shape[1]
         output_length = outputs.shape[1]
 
-        actual_output_tokens = (
+        generated_tokens_per_sequence = (
             output_length - input_length
         )
 
-        tpot_ms = calculate_tpot_ms(
-            e2e_latency_ms=e2e_latency_ms,
-            ttft_ms=ttft_ms,
-            output_tokens=actual_output_tokens,
+        total_generated_tokens = (
+            generated_tokens_per_sequence
+            * workload.batch_size
         )
 
         e2e_tps = calculate_e2e_throughput(
-            output_tokens=actual_output_tokens,
+            output_tokens=total_generated_tokens,
             e2e_latency_ms=e2e_latency_ms,
         )
 
-        decode_tps = calculate_decode_throughput(
-            output_tokens=actual_output_tokens,
-            e2e_latency_ms=e2e_latency_ms,
-            ttft_ms=ttft_ms,
-        )
+        # decode_tps = calculate_decode_throughput(
+        #     output_tokens=actual_output_tokens,
+        #     e2e_latency_ms=e2e_latency_ms,
+        #     ttft_ms=ttft_ms,
+        # )
+
+        # tpot_ms = calculate_tpot_ms(
+        #     e2e_latency_ms=e2e_latency_ms,
+        #     ttft_ms=ttft_ms,
+        #     output_tokens=actual_output_tokens,
+        # )
+
+        if ttft_ms is not None:
+            tpot_ms = calculate_tpot_ms(
+                e2e_latency_ms=e2e_latency_ms,
+                ttft_ms=ttft_ms,
+                output_tokens=generated_tokens_per_sequence,
+            )
+
+            decode_tps = calculate_decode_throughput(
+                output_tokens=generated_tokens_per_sequence,
+                e2e_latency_ms=e2e_latency_ms,
+                ttft_ms=ttft_ms,
+            )
+
+        else:
+            tpot_ms = None
+            decode_tps = None
 
         peak_vram_mb = (
             torch.cuda.max_memory_allocated()
@@ -135,7 +190,7 @@ class HFBackend:
 
         return RunResult(
             run_id=run_id,
-
+            backend=config.backend,
             model_id=config.model_id,
             dtype=config.dtype,
             batch_size=config.batch_size,
@@ -144,12 +199,13 @@ class HFBackend:
 
             gpu_name=torch.cuda.get_device_name(),
             torch_version=torch.__version__,
-            transformers_version=transformers.__version__,
+            backend_version=transformers.__version__,
             cuda_version=torch.version.cuda or "unknown",
 
             e2e_latency_ms=e2e_latency_ms,
             ttft_ms=ttft_ms,
-            actual_output_tokens=actual_output_tokens,
+            generated_tokens_per_sequence=generated_tokens_per_sequence,
+            total_generated_tokens=total_generated_tokens,
             peak_vram_mb=peak_vram_mb,
 
             tpot_ms=tpot_ms,

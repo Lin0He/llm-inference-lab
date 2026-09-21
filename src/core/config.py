@@ -5,6 +5,7 @@ from dataclasses import dataclass
 class ExperimentConfig:
     model_id: str = "Qwen/Qwen3.5-4B"
     dtype: str = "bfloat16"
+    backend: str = "vllm"
 
     batch_size: int = 1
     input_tokens: int = 512
@@ -14,6 +15,8 @@ class ExperimentConfig:
     measure_runs: int = 5
 
     seed: int = 42
+
+    enable_prefix_caching: bool = False
 
     def validate(self) -> None:
         if self.dtype not in {"float16", "bfloat16"}:

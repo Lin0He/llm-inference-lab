@@ -10,6 +10,8 @@ class RunResult:
     # Experimental conditions
     model_id: str
     dtype: str
+    backend: str
+
     batch_size: int
     input_tokens: int
     max_new_tokens: int
@@ -17,14 +19,15 @@ class RunResult:
     # Environment metadata
     gpu_name: str
     torch_version: str
-    transformers_version: str
+    backend_version: str
     cuda_version: str
 
     # Direct observations
     e2e_latency_ms: float
-    ttft_ms: float
-    actual_output_tokens: int
-    peak_vram_mb: float
+    ttft_ms: float | None
+    generated_tokens_per_sequence: int
+    total_generated_tokens: int
+    peak_vram_mb: float | None
 
     # Derived metrics
     tpot_ms: float | None
@@ -36,6 +39,7 @@ class RunResult:
 class ExperimentSummary:
     model_id: str
     dtype: str
+    backend: str
     batch_size: int
     input_tokens: int
     max_new_tokens: int
@@ -48,25 +52,25 @@ class ExperimentSummary:
     std_latency_ms: float
 
     # TTFT
-    mean_ttft_ms: float
-    median_ttft_ms: float
-    std_ttft_ms: float
+    mean_ttft_ms: float | None
+    median_ttft_ms: float | None
+    std_ttft_ms: float | None
 
     # TPOT
-    mean_tpot_ms: float
-    median_tpot_ms: float
-    std_tpot_ms: float
+    mean_tpot_ms: float | None
+    median_tpot_ms: float | None
+    std_tpot_ms: float | None
 
     # Throughput
     mean_e2e_tokens_per_second: float
     median_e2e_tokens_per_second: float
 
-    mean_decode_tokens_per_second: float
-    median_decode_tokens_per_second: float
+    mean_decode_tokens_per_second: float | None
+    median_decode_tokens_per_second: float | None
 
     # Memory
-    mean_peak_vram_mb: float
-    max_peak_vram_mb: float
+    mean_peak_vram_mb: float | None
+    max_peak_vram_mb: float | None
 
 
 def summarize_results(
@@ -85,6 +89,7 @@ def summarize_results(
     ttfts = [
         r.ttft_ms
         for r in results
+        if r.ttft_ms is not None
     ]
 
     tpots = [
@@ -105,23 +110,25 @@ def summarize_results(
     ]
 
     peak_vram = [
-        r.peak_vram_mb
-        for r in results
+    r.peak_vram_mb
+    for r in results
+    if r.peak_vram_mb is not None
     ]
 
-    if not tpots:
-        raise ValueError(
-            "No valid TPOT values found in results."
-        )
+    # if not tpots:
+    #     raise ValueError(
+    #         "No valid TPOT values found in results."
+    #     )
 
-    if not decode_throughputs:
-        raise ValueError(
-            "No valid decode throughput values found in results."
-        )
+    # if not decode_throughputs:
+    #     raise ValueError(
+    #         "No valid decode throughput values found in results."
+    #     )
 
     return ExperimentSummary(
         model_id=first.model_id,
         dtype=first.dtype,
+        backend=first.backend,
         batch_size=first.batch_size,
         input_tokens=first.input_tokens,
         max_new_tokens=first.max_new_tokens,
@@ -132,13 +139,14 @@ def summarize_results(
         median_latency_ms=median(latencies),
         std_latency_ms=pstdev(latencies),
 
-        mean_ttft_ms=mean(ttfts),
-        median_ttft_ms=median(ttfts),
-        std_ttft_ms=pstdev(ttfts),
+        mean_ttft_ms=mean(ttfts) if ttfts else None,
+        median_ttft_ms=median(ttfts) if ttfts else None,
+        std_ttft_ms=pstdev(ttfts) if ttfts else None,
 
-        mean_tpot_ms=mean(tpots),
-        median_tpot_ms=median(tpots),
-        std_tpot_ms=pstdev(tpots),
+        mean_tpot_ms=mean(tpots) if tpots else None,
+        median_tpot_ms=median(tpots) if tpots else None,
+        std_tpot_ms=pstdev(tpots) if tpots else None,
+
 
         mean_e2e_tokens_per_second=mean(
             e2e_throughputs
@@ -147,15 +155,29 @@ def summarize_results(
             e2e_throughputs
         ),
 
-        mean_decode_tokens_per_second=mean(
-            decode_throughputs
-        ),
-        median_decode_tokens_per_second=median(
-            decode_throughputs
+        mean_decode_tokens_per_second=(
+            mean(decode_throughputs)
+            if decode_throughputs
+            else None
         ),
 
-        mean_peak_vram_mb=mean(peak_vram),
-        max_peak_vram_mb=max(peak_vram),
+        median_decode_tokens_per_second=(
+            median(decode_throughputs)
+            if decode_throughputs
+            else None
+        ),
+
+        mean_peak_vram_mb=(
+            mean(peak_vram)
+            if peak_vram
+            else None
+        ),
+
+        max_peak_vram_mb=(
+            max(peak_vram)
+            if peak_vram
+            else None
+        ),
     )
 
 

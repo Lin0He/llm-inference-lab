@@ -10,13 +10,21 @@ from core.metrics import (
     summarize_results,
 )
 
-
 @dataclass
 class ConfigResult:
     config: ExperimentConfig
     runs: list[RunResult]
     summary: ExperimentSummary
 
+def backend_cache_key(
+    config: ExperimentConfig,
+    ) -> tuple:
+        return (
+            config.backend,
+            config.model_id,
+            config.dtype,
+            config.enable_prefix_caching,
+        )
 
 class ExperimentRunner:
     def __init__(
@@ -34,10 +42,7 @@ class ExperimentRunner:
         self,
         config: ExperimentConfig,
     ):
-        backend_key = (
-            config.model_id,
-            config.dtype,
-        )
+        backend_key = backend_cache_key(config)
 
         if backend_key not in self._backend_cache:
             backend = self.backend_factory(config)
@@ -63,6 +68,7 @@ class ExperimentRunner:
 
         print(
             f"\nRunning config: "
+            f"backend={config.backend},"
             f"dtype={config.dtype}, "
             f"batch={config.batch_size}, "
             f"input_tokens={config.input_tokens}, "
@@ -92,11 +98,13 @@ class ExperimentRunner:
             print(
                 f"  Run {run_id}: "
                 f"E2E={result.e2e_latency_ms:.2f} ms | "
-                f"TTFT={result.ttft_ms:.2f} ms | "
-                f"TPOT={self._format_optional(result.tpot_ms, 'ms')} | "
+                f"TTFT={self._format_optional(result.ttft_ms, 'ms')} | "
+                f"TPOT={self._format_optional(result.tpot_ms, 'ms/token')} | "
                 f"E2E TPS={result.e2e_tokens_per_second:.2f} tok/s | "
                 f"Decode TPS={self._format_optional(result.decode_tokens_per_second, 'tok/s')} | "
-                f"VRAM={result.peak_vram_mb:.2f} MB"
+                f"Output/seq={result.generated_tokens_per_sequence} | "
+                f"Total output={result.total_generated_tokens} | "
+                f"VRAM={self._format_optional(result.peak_vram_mb, 'MB')}"
             )
 
         summary = summarize_results(runs)
@@ -106,6 +114,15 @@ class ExperimentRunner:
             runs=runs,
             summary=summary,
         )
+
+    def clear_backend_cache(self) -> None:
+        for backend in self._backend_cache.values():
+            backend.close()
+
+        self._backend_cache.clear()
+    
+    def close(self) -> None:
+        self.clear_backend_cache()
 
     def run_configs(
         self,

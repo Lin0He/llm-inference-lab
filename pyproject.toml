@@ -9,6 +9,7 @@ dependencies = [
     "accelerate",
     "huggingface-hub",
     "matplotlib>=3.11.2",
+    "vllm",
 ]
 
 [dependency-groups]
